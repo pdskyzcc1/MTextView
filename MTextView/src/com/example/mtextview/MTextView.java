@@ -34,6 +34,11 @@ import android.widget.TextView;
  * @下午5:29:27
  */
 public class MTextView extends TextView {
+
+    private static final String NAMESPACE = "http://schemas.android.com/apk/res/android";
+    private static final String ATTR_MAX_LINES = "maxLines";
+    private static final int DEFAULT_VALUE_MAXLINES = 100;
+
     /**
      * 缓存测量过的数据
      */
@@ -61,7 +66,10 @@ public class MTextView extends TextView {
     private int textColor = Color.BLACK;
     //行距
     private float lineSpacing;
-    private int lineSpacingDP = 5;
+    private int lineSpacingDP = 3;
+
+    /**最大行数*/
+    private int maxLine = DEFAULT_VALUE_MAXLINES;
     /**
      * 段间距,-1为默认
      */
@@ -83,10 +91,14 @@ public class MTextView extends TextView {
      */
     private ArrayList<Object> obList = new ArrayList<Object>();
     /**
-     * 是否使用默认{@link #onMeasure(int, int)}和{@link #onDraw(android.graphics.Canvas)}
+     * 是否使用默认{@link #onMeasure(int, int)}和{@link #onDraw(Canvas)}
      */
     private boolean useDefault = false;
     protected CharSequence text = "";
+    /**
+     * text的id,measuredData会缓存text绘制前测量的高度，但是同样的text需要绘制的布局也许不同，例如同一个text，一个是右侧无图的，另一个是有图的，复用就有问题
+     */
+    protected String textId;
 
     private int minHeight;
     /**
@@ -94,37 +106,42 @@ public class MTextView extends TextView {
      */
     private DisplayMetrics displayMetrics;
     /**
-     * {@link android.text.style.BackgroundColorSpan}用
+     * {@link BackgroundColorSpan}用
      */
     private Paint textBgColorPaint = new Paint();
     /**
-     * {@link android.text.style.BackgroundColorSpan}用
+     * {@link BackgroundColorSpan}用
      */
     private Rect textBgColorRect = new Rect();
 
     public MTextView(Context context) {
         super(context);
-        init(context);
+        init(context,null);
     }
 
     public MTextView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init(context);
+        init(context, attrs);
     }
 
     public MTextView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-        init(context);
+        init(context, attrs);
     }
 
 
-    public void init(Context context) {
+    public void init(Context context, AttributeSet attrs) {
         this.context = context;
         paint.setAntiAlias(true);
         lineSpacing = dip2px(context, lineSpacingDP);
         minHeight = dip2px(context, 30);
 
         displayMetrics = new DisplayMetrics();
+        if (attrs != null){
+//            maxLine = attrs.getAttributeIntValue(NAMESPACE, ATTR_MAX_LINES, DEFAULT_VALUE_MAXLINES);
+            //TODO 最多显示两行，获取属性有问题，再修改
+            maxLine = 2;
+        }
     }
 
     public static int px2sp(Context context, float pxValue) {
@@ -186,16 +203,20 @@ public class MTextView extends TextView {
 
         paint.setTextSize(this.getTextSize());
         paint.setColor(textColor);
-        int realHeight = measureContentHeight((int) width);
+        int realHeight = measureContentHeight(width);
 
         //如果实际行宽少于预定的宽度，减少行宽以使其内容横向居中
         int leftPadding = getCompoundPaddingLeft();
         int rightPadding = getCompoundPaddingRight();
-        width = Math.min(width, (int) lineWidthMax + leftPadding + rightPadding);
 
-        if (oneLineWidth > -1) {
-            width = oneLineWidth;
-        }
+        //为什么要取行宽的最小值？
+//        width = Math.min(width, (int) lineWidthMax + leftPadding + rightPadding);
+
+        //为什么单行时要取文字实际的行宽为TextView的宽？
+//        if (oneLineWidth > -1) {
+//            //把一行文字的实际宽度赋值给width
+//            width = oneLineWidth;
+//        }
         switch (heightMode) {
             case MeasureSpec.EXACTLY:
                 height = heightSize;
@@ -233,11 +254,17 @@ public class MTextView extends TextView {
         int leftPadding = getCompoundPaddingLeft();
         int topPadding = getCompoundPaddingTop();
 
-        float height = 0 + topPadding + lineSpacing;
-        //只有一行时
+        //行高去掉行间距
+//        float height = 0 + topPadding + lineSpacing;
+        float height = 0 + topPadding;
+        //只有一行时 //只有一行的时候，oneLineWidth 不等于 -1
         if (oneLineWidth != -1) {
             height = getMeasuredHeight() / 2 - contentList.get(0).height / 2;
         }
+
+        //为什么color要在这个onDraw方法里面设置才行？onMeasure方法中设置无效
+        //不确定是缓存等原因，造成调用setText方法后，text的字体颜色不会被改变，需要在onDraw中再设置一次
+        paint.setColor(textColor);
 
         for (LINE aContentList : contentList) {
             //绘制一行
@@ -250,6 +277,7 @@ public class MTextView extends TextView {
 
                 paint.getFontMetrics(mFontMetrics);
                 float x = realDrawedWidth;
+                // 当前heigh + 一行文字的高度 - baseline下方的高度
                 float y = height + aContentList.height - paint.getFontMetrics().descent;
                 float top = y - aContentList.height;
                 float bottom = y + mFontMetrics.descent;
@@ -279,8 +307,8 @@ public class MTextView extends TextView {
                         canvas.drawRect(textBgColorRect, textBgColorPaint);
                         canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aContentList.height - mFontMetrics.descent, paint);
                         realDrawedWidth += width;
-                    } else//做字符串处理
-                    {
+                    } else {
+                        //做字符串处理
                         canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aContentList.height - mFontMetrics.descent, paint);
                         realDrawedWidth += width;
                     }
@@ -316,16 +344,15 @@ public class MTextView extends TextView {
             return cachedHeight;
         }
 
-        // 已绘的宽度
-        float obWidth = 0;
-        float obHeight = 0;
+
 
         float textSize = this.getTextSize();
         FontMetrics fontMetrics = paint.getFontMetrics();
-        //行高
+        //行高，字体矩阵的 bottom - top
         float lineHeight = fontMetrics.bottom - fontMetrics.top;
-        //计算出的所需高度
-        float height = lineSpacing;
+        //计算出的所需高度 //先把行间距赋值给TextView高干嘛？
+//        float height = lineSpacing;
+        float height = 0;
 
         int leftPadding = getCompoundPaddingLeft();
         int rightPadding = getCompoundPaddingRight();
@@ -334,23 +361,30 @@ public class MTextView extends TextView {
 
         boolean splitFlag = false;//BackgroundColorSpan拆分用
 
-        width = width - leftPadding - rightPadding;
+        //减去 paddingleft 和 paddingright
+        //width是父View给子View分配的宽度
+        width = width - leftPadding - rightPadding;//获取文字的实际显示区域
 
         oneLineWidth = -1;
 
         contentList.clear();
 
-        StringBuilder sb;
+//        StringBuilder sb;
 
         LINE line = new LINE();
 
         for (int i = 0; i < obList.size(); i++) {
             Object ob = obList.get(i);
+            // 已绘的宽度
+            float obWidth = 0;//一个字符的宽度
+            float obHeight = 0;//一个字符的高度(应该包含baseline那块高度？)
 
             if (ob instanceof String) {
                 obWidth = paint.measureText((String) ob);
                 obHeight = textSize;
-                if ("\n".equals(ob)) { //遇到"\n"则换行
+                if ("\n".equals(ob)) {
+                    //遇到"\n"则换行
+                    //除了前面的文字，这一行剩下的空间都是“\n”的
                     obWidth = width - drawedWidth;
                 }
             } else if (ob instanceof SpanObject) {
@@ -359,8 +393,10 @@ public class MTextView extends TextView {
                     int start = ((Spannable) text).getSpanStart(span);
                     int end = ((Spannable) text).getSpanEnd(span);
                     obWidth = ((DynamicDrawableSpan) span).getSize(getPaint(), text, start, end, mSpanFmInt);
+                    //top是基准线上方高度，负值， bottom是基准线下方高度，正直，所以整个span高度是绝对值相加
                     obHeight = Math.abs(mSpanFmInt.top) + Math.abs(mSpanFmInt.bottom);
                     if (obHeight > lineHeight) {
+                        //行高和span的高取最大值
                         lineHeight = obHeight;
                     }
                 } else if (span instanceof BackgroundColorSpan) {
@@ -391,8 +427,8 @@ public class MTextView extends TextView {
                         obList.set(i, so2);
                         i--;
                     }
-                }//做字符串处理
-                else {
+                } else {
+                    //做字符串处理
                     String str = ((SpanObject) ob).source.toString();
                     obWidth = paint.measureText(str);
                     obHeight = textSize;
@@ -401,6 +437,7 @@ public class MTextView extends TextView {
 
             //这一行满了，存入contentList,新起一行
             if (width - drawedWidth < obWidth || splitFlag) {
+                //行宽 - 已绘制的宽度 < 当前要绘制的字符或span的宽度
                 splitFlag = false;
                 contentList.add(line);
 
@@ -408,53 +445,107 @@ public class MTextView extends TextView {
                     lineWidthMax = drawedWidth;
                 }
                 drawedWidth = 0;
-                //判断是否有分段
-                int objNum = line.line.size();
-                if (paragraphSpacing > 0
-                        && objNum > 0
-                        && line.line.get(objNum - 1) instanceof String
-                        && "\n".equals(line.line.get(objNum - 1))) {
-                    height += line.height + paragraphSpacing;
-                } else {
-                    height += line.height + lineSpacing;
+
+                //判断行数的限制
+//                int maxLines = getMaxLines();
+                if (contentList.size() == maxLine){
+                    //当前行数和最大行数相等
+                    //最后一行的最后一个字符设置为…
+                    Object lastOb = line.line.get(line.line.size()-1);
+
+                    if (lastOb instanceof String) {
+                        String str = ((String) lastOb);
+                        lastOb = str.substring(0,str.length()-1).concat("…");
+
+
+                    } else if (lastOb instanceof SpanObject) {
+                        Object span = ((SpanObject) lastOb).span;
+                        if (span instanceof DynamicDrawableSpan) {
+                            lastOb = "…";
+                        } else if (span instanceof BackgroundColorSpan) {
+                            lastOb = "…";
+                        } else {
+                            //做字符串处理
+                            String str = ((SpanObject) lastOb).source.toString();
+                            lastOb = str.substring(0,str.length()-1).concat("…");
+                        }
+                    }
+
+                    line.line.set(line.line.size()-1,lastOb);
+
+                    //把当前字符后面的字符都清空
+                    for (int k = i+1, l = obList.size();k < l;k++){
+                        obList.remove(obList.size()-1);
+                    }
+
+                }else{
+                    //没有超过最大行数
+                    //判断是否有分段
+                    int objNum = line.line.size();
+                    if (paragraphSpacing > 0
+                            && objNum > 0
+                            && line.line.get(objNum - 1) instanceof String
+                            && "\n".equals(line.line.get(objNum - 1))) {
+                        height += line.height + paragraphSpacing;
+                    } else {
+                        height += line.height + lineSpacing;
+//                    height += line.height;
+                    }
+
+                    //当前行剩余宽度，已经小于当前字符宽度，重新创建一行
+                    line = new LINE();
                 }
+
 
                 lineHeight = obHeight;
 
-                line = new LINE();
+            }else{
+                //这一行剩余的宽度够这个字符
+                //obWidth是每个字符的宽度，drawedWith是已经绘制的字符的宽度
+                drawedWidth += obWidth;
+
+                if (ob instanceof String && line.line.size() > 0 && (line.line.get(line.line.size() - 1) instanceof String)) {
+                    //当前字符是一个String，并且当前已经绘制的最后一个字符也是String
+                    //把相连的String字符，变成一个String存到Line对象中
+                    int size = line.line.size();
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(line.line.get(size - 1));
+                    sb.append(ob);
+                    ob = sb.toString();
+                    obWidth = obWidth + line.widthList.get(size - 1);
+                    line.line.set(size - 1, ob);
+                    line.widthList.set(size - 1, (int) obWidth);
+                    line.height = (int) lineHeight;
+                } else {
+                    line.line.add(ob);
+                    line.widthList.add((int) obWidth);
+                    line.height = (int) lineHeight;
+                }
+
             }
 
-            drawedWidth += obWidth;
 
-            if (ob instanceof String && line.line.size() > 0 && (line.line.get(line.line.size() - 1) instanceof String)) {
-                int size = line.line.size();
-                sb = new StringBuilder();
-                sb.append(line.line.get(size - 1));
-                sb.append(ob);
-                ob = sb.toString();
-                obWidth = obWidth + line.widthList.get(size - 1);
-                line.line.set(size - 1, ob);
-                line.widthList.set(size - 1, (int) obWidth);
-                line.height = (int) lineHeight;
-            } else {
-                line.line.add(ob);
-                line.widthList.add((int) obWidth);
-                line.height = (int) lineHeight;
-            }
 
         }
+
+        //所有字符已经添加进Line,并且都加进contentList
 
         if (drawedWidth > lineWidthMax) {
             lineWidthMax = drawedWidth;
         }
 
         if (line != null && line.line.size() > 0) {
+            //多行 //最后一行？干嘛要加行间距？
             contentList.add(line);
-            height += lineHeight + lineSpacing;
+//            height += lineHeight + lineSpacing;
+            height += lineHeight;
         }
         if (contentList.size() <= 1) {
+            //一行或0行的情况？
             oneLineWidth = (int) drawedWidth + leftPadding + rightPadding;
-            height = lineSpacing + lineHeight + lineSpacing;
+            //单行干嘛要给上下加行间距
+//            height = lineSpacing + lineHeight + lineSpacing;
+            height = lineHeight;
         }
 
         cacheData(width, (int) height);
@@ -470,7 +561,10 @@ public class MTextView extends TextView {
      */
     @SuppressWarnings("unchecked")
     private int getCachedData(String text, int width) {
-        SoftReference<MeasuredData> cache = measuredData.get(text);
+        if (textId == null){
+            textId = "";
+        }
+        SoftReference<MeasuredData> cache = measuredData.get(textId + text);
         if (cache == null) {
             return -1;
         }
@@ -515,25 +609,43 @@ public class MTextView extends TextView {
         }
 
         SoftReference<MeasuredData> cache = new SoftReference<MeasuredData>(md);
-        measuredData.put(text.toString(), cache);
+        if (textId == null){
+            textId = "";
+        }
+        measuredData.put(textId + text.toString(), cache);
     }
 
+    /**
+     * 无id
+     *
+     * @param cs
+     */
+    public void setMText(CharSequence cs) {
+        setMText(null,cs);
+    }
     /**
      * 用本函数代替{@link #setText(CharSequence)}
      *
      * @param cs
      */
-    public void setMText(CharSequence cs) {
+    public void setMText(String textId, CharSequence cs) {
+        if (useDefault){
+            setText(cs);
+            return;
+        }
+        this.textId = textId;
         text = cs;
 
         obList.clear();
 
+        //把cs全部转换为SpanObject添加进isList
         ArrayList<SpanObject> isList = new ArrayList<SpanObject>();
         useDefault = false;
 
         if (cs instanceof Spannable) {
             CharacterStyle[] spans = ((Spannable) cs).getSpans(0, cs.length(), CharacterStyle.class);
             for (int i = 0; i < spans.length; i++) {
+                //获取每个span的起始index,和结尾index ?
                 int s = ((Spannable) cs).getSpanStart(spans[i]);
                 int e = ((Spannable) cs).getSpanEnd(spans[i]);
                 SpanObject iS = new SpanObject();
@@ -545,24 +657,26 @@ public class MTextView extends TextView {
             }
         }
 
-        //对span进行排序，以免不同种类的span位置错乱
+        //对span进行排序，以免不同种类的span位置错乱 //为毛会错乱呢？
         SpanObject[] spanArray = new SpanObject[isList.size()];
         isList.toArray(spanArray);
         Arrays.sort(spanArray, 0, spanArray.length, new SpanObjectComparator());
         isList.clear();
         for (int i = 0; i < spanArray.length; i++) {
+            //把排序后的SpanObject再添加进list
             isList.add(spanArray[i]);
         }
 
         String str = cs.toString();
 
+        //添加SpanObject 和 单字符到obList中，一个元素就是一个字符或者SpanObject
         for (int i = 0, j = 0; i < cs.length(); ) {
             if (j < isList.size()) {
                 SpanObject is = isList.get(j);
                 if (i < is.start) {
                     Integer cp = str.codePointAt(i);
-                    //支持增补字符
                     if (Character.isSupplementaryCodePoint(cp)) {
+                        //支持增补字符
                         i += 2;
                     } else {
                         i++;
@@ -631,7 +745,7 @@ public class MTextView extends TextView {
         public Object span;
         public int start;
         public int end;
-        public CharSequence source;
+        public CharSequence source;//代表span的源charsequence，例如 代表“热”标签的 [LABEL]
     }
 
     /**
@@ -655,7 +769,9 @@ public class MTextView extends TextView {
      * @下午5:22:12
      */
     class LINE {
+        //每个字符的对象
         public ArrayList<Object> line = new ArrayList<Object>();
+        //每个字符的宽度
         public ArrayList<Integer> widthList = new ArrayList<Integer>();
         public float height;
 
