@@ -1,6 +1,7 @@
 package com.example.mtextview;
 
 import java.lang.ref.SoftReference;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -25,19 +26,18 @@ import android.text.style.DynamicDrawableSpan;
 import android.text.style.ImageSpan;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.widget.TextView;
 
 /**
- * @author huangwei
+ * @author huangwei YAO
  * @功能 图文混排TextView，请使用{@link #setMText(CharSequence)}
  * @2014年5月27日
  * @下午5:29:27
  */
 public class MTextView extends TextView {
 
-    private static final String NAMESPACE = "http://schemas.android.com/apk/res/android";
-    private static final String ATTR_MAX_LINES = "maxLines";
-    private static final int DEFAULT_VALUE_MAXLINES = 100;
+    private static final String TAG = "MTextView";
 
     /**
      * 缓存测量过的数据
@@ -69,7 +69,7 @@ public class MTextView extends TextView {
     private int lineSpacingDP = 3;
 
     /**最大行数*/
-    private int maxLine = DEFAULT_VALUE_MAXLINES;
+    private int maxLine = Integer.MAX_VALUE;
     /**
      * 段间距,-1为默认
      */
@@ -137,11 +137,27 @@ public class MTextView extends TextView {
         minHeight = dip2px(context, 30);
 
         displayMetrics = new DisplayMetrics();
-        if (attrs != null){
-//            maxLine = attrs.getAttributeIntValue(NAMESPACE, ATTR_MAX_LINES, DEFAULT_VALUE_MAXLINES);
-            //TODO 最多显示两行，获取属性有问题，再修改
-            maxLine = 2;
+
+        try{
+            //通过反射获取maxlines
+            Class ownerClass = this.getClass();
+            ownerClass = ownerClass.getSuperclass();
+
+            Field field = ownerClass.getDeclaredField("mMaximum");
+            field.setAccessible(true);
+
+            maxLine = field.getInt(this);
+            if (maxLine < 1){
+                //应该不会出现这种情况
+                maxLine = 1;
+            }
+
+        }catch (Exception e){
+            Log.w(TAG, "反射异常", e);
+//            maxLine = 2;
         }
+
+
     }
 
     public static int px2sp(Context context, float pxValue) {
