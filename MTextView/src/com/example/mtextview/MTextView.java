@@ -508,11 +508,14 @@ public class MTextView extends TextView {
 //                    height += line.height;
                     }
 
-                    //当前行剩余宽度，已经小于当前字符宽度，重新创建一行
+                    //当前行剩余宽度，已经小于当前字符宽度，重新创建一行,把这个字符添加进Line中
                     line = new LINE();
+                    line.line.add(ob);
+                    line.widthList.add((int) obWidth);
+                    line.height = (int) lineHeight;
                 }
 
-
+                drawedWidth = obWidth;
                 lineHeight = obHeight;
 
             }else{

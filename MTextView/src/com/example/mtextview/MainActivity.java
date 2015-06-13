@@ -11,7 +11,7 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity
 {
-	private MTextView mTextView;
+	private AntiNewLineTextView mTextView;
 	private TextView textView;
 	
 	@Override
@@ -20,7 +20,7 @@ public class MainActivity extends Activity
 		super.onCreate(savedInstanceState);
 
 		setContentView(R.layout.activity_main);
-		mTextView = (MTextView) this.findViewById(R.id.mtextview);
+		mTextView = (AntiNewLineTextView) this.findViewById(R.id.mtextview);
 		textView = (TextView) this.findViewById(R.id.textview);
 	    
         
