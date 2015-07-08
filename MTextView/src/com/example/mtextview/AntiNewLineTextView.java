@@ -447,9 +447,9 @@ public class AntiNewLineTextView extends TextView {
                 }
             }
 
-            //这一行满了，存入contentList,新起一行
             if (width - drawedWidth < obWidth || splitFlag) {
                 //行宽 - 已绘制的宽度 < 当前要绘制的字符或span的宽度
+                //这一行满了，存入contentList,新起一行
                 splitFlag = false;
                 contentList.add(line);
 
@@ -508,14 +508,15 @@ public class AntiNewLineTextView extends TextView {
                     line = new LINE();
                     line.line.add(ob);
                     line.widthList.add((int) obWidth);
-                    line.height = (int) lineHeight;
+//                    line.height = (int) lineHeight;
+                    line.height = (int) obHeight;//新建一行的第一个字符,高用obHeight,不用lineHeight,因为此时的lineHeight是上一行的高
                 }
 
                 drawedWidth = obWidth;
-                lineHeight = obHeight;
+                lineHeight = obHeight;//这里给赋值了文字真实的高度
 
             }else{
-                //这一行剩余的宽度够这个字符
+                //这一行剩余的宽度 > 当前要画的字符
                 //obWidth是每个字符的宽度，drawedWith是已经绘制的字符的宽度
                 drawedWidth += obWidth;
 
