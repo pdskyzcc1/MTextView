@@ -62,7 +62,7 @@ public class AntiNewLineTextView extends TextView {
     private int textColor = Color.BLACK;
     //行距
     private float lineSpacing;
-    private int lineSpacingDP = 3;
+    private int lineSpacingDP = 1;
 
     /**最大行数*/
     private int maxLine = Integer.MAX_VALUE;
@@ -130,7 +130,7 @@ public class AntiNewLineTextView extends TextView {
         this.context = context;
         paint.setAntiAlias(true);
         lineSpacing = dip2px(context, lineSpacingDP);
-        minHeight = dip2px(context, 30);
+        minHeight = dip2px(context, 10);
 
         displayMetrics = new DisplayMetrics();
 
@@ -270,9 +270,10 @@ public class AntiNewLineTextView extends TextView {
 //        float height = 0 + topPadding + lineSpacing;
         float height = 0 + topPadding;
         //只有一行时 //只有一行的时候，oneLineWidth 不等于 -1
-        if (oneLineWidth != -1) {
-            height = getMeasuredHeight() / 2 - contentList.get(0).height / 2;
-        }
+//        if (oneLineWidth != -1) {
+//            height = getMeasuredHeight() / 2 - contentList.get(0).height / 2;
+//        }
+
 
         //为什么color要在这个onDraw方法里面设置才行？onMeasure方法中设置无效
         //不确定是缓存等原因，造成调用setText方法后，text的字体颜色不会被改变，需要在onDraw中再设置一次
@@ -290,9 +291,12 @@ public class AntiNewLineTextView extends TextView {
                 paint.getFontMetrics(mFontMetrics);
                 float x = realDrawedWidth;
                 // 当前heigh + 一行文字的高度 - baseline下方的高度
-                float y = height + aContentList.height - paint.getFontMetrics().descent;
+                float y = height + aContentList.height - mFontMetrics.descent;
+//                float top = y - aContentList.height;
+//                float bottom = y + mFontMetrics.descent;
+//                float y = height + aContentList.height;
                 float top = y - aContentList.height;
-                float bottom = y + mFontMetrics.descent;
+                float bottom = y;
                 if (ob instanceof String) {
                     canvas.drawText((String) ob, realDrawedWidth, y, paint);
                     realDrawedWidth += width;
@@ -358,10 +362,12 @@ public class AntiNewLineTextView extends TextView {
 
 
 
-        float textSize = this.getTextSize();
         FontMetrics fontMetrics = paint.getFontMetrics();
+        float textSize = this.getTextSize();
+        float textHeight = textSize + fontMetrics.descent;
         //行高，字体矩阵的 bottom - top
-        float lineHeight = fontMetrics.bottom - fontMetrics.top;
+//        float lineHeight = fontMetrics.bottom - fontMetrics.top;
+        float lineHeight = 0;//默认行高是0，上面计算出来的值比实际文字高度要高好几个像素
         //计算出的所需高度 //先把行间距赋值给TextView高干嘛？
 //        float height = lineSpacing;
         float height = 0;
@@ -393,7 +399,8 @@ public class AntiNewLineTextView extends TextView {
 
             if (ob instanceof String) {
                 obWidth = paint.measureText((String) ob);
-                obHeight = textSize;
+//                obHeight = textSize;
+                obHeight = textHeight;
                 if ("\n".equals(ob)) {
                     //遇到"\n"则换行
                     //除了前面的文字，这一行剩下的空间都是“\n”的
@@ -407,14 +414,15 @@ public class AntiNewLineTextView extends TextView {
                     obWidth = ((DynamicDrawableSpan) span).getSize(getPaint(), text, start, end, mSpanFmInt);
                     //top是基准线上方高度，负值， bottom是基准线下方高度，正直，所以整个span高度是绝对值相加
                     obHeight = Math.abs(mSpanFmInt.top) + Math.abs(mSpanFmInt.bottom);
-                    if (obHeight > lineHeight) {
-                        //行高和span的高取最大值
-                        lineHeight = obHeight;
-                    }
+//                    if (obHeight > lineHeight) {
+//                        //行高和span的高取最大值
+//                        lineHeight = obHeight;
+//                    }
                 } else if (span instanceof BackgroundColorSpan) {
                     String str = ((SpanObject) ob).source.toString();
                     obWidth = paint.measureText(str);
-                    obHeight = textSize;
+//                    obHeight = textSize;
+                    obHeight = textHeight;
 
                     //如果太长,拆分
                     int k = str.length() - 1;
@@ -443,8 +451,14 @@ public class AntiNewLineTextView extends TextView {
                     //做字符串处理
                     String str = ((SpanObject) ob).source.toString();
                     obWidth = paint.measureText(str);
-                    obHeight = textSize;
+//                    obHeight = textSize;
+                    obHeight = textHeight;
                 }
+            }
+
+            if (obHeight > lineHeight) {
+                //行高和span的高取最大值
+                lineHeight = obHeight;
             }
 
             if (width - drawedWidth < obWidth || splitFlag) {
@@ -456,7 +470,7 @@ public class AntiNewLineTextView extends TextView {
                 if (drawedWidth > lineWidthMax) {
                     lineWidthMax = drawedWidth;
                 }
-                drawedWidth = 0;
+//                drawedWidth = 0;
 
                 //判断行数的限制
 //                int maxLines = getMaxLines();
