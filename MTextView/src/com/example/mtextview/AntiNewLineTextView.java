@@ -16,12 +16,14 @@ import android.text.style.DynamicDrawableSpan;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.widget.TextView;
 
 import java.lang.ref.SoftReference;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 
@@ -64,7 +66,9 @@ public class AntiNewLineTextView extends TextView {
     private float lineSpacing;
     private int lineSpacingDP = 1;
 
-    /**最大行数*/
+    /**
+     * 最大行数
+     */
     private int maxLine = Integer.MAX_VALUE;
     /**
      * 段间距,-1为默认
@@ -112,7 +116,7 @@ public class AntiNewLineTextView extends TextView {
 
     public AntiNewLineTextView(Context context) {
         super(context);
-        init(context,null);
+        init(context, null);
     }
 
     public AntiNewLineTextView(Context context, AttributeSet attrs) {
@@ -134,7 +138,7 @@ public class AntiNewLineTextView extends TextView {
 
         displayMetrics = new DisplayMetrics();
 
-        try{
+        try {
             //通过反射获取maxlines
             Class ownerClass = this.getClass();
             ownerClass = ownerClass.getSuperclass();
@@ -143,12 +147,12 @@ public class AntiNewLineTextView extends TextView {
             field.setAccessible(true);
 
             maxLine = field.getInt(this);
-            if (maxLine < 1){
+            if (maxLine < 1) {
                 //应该不会出现这种情况
                 maxLine = 1;
             }
 
-        }catch (Exception e){
+        } catch (Exception e) {
             Log.w(TAG, "反射异常", e);
 //            maxLine = 2;
         }
@@ -268,39 +272,53 @@ public class AntiNewLineTextView extends TextView {
 
         //行高去掉行间距
 //        float height = 0 + topPadding + lineSpacing;
-        float height = 0 + topPadding;
+        float height = topPadding;
         //只有一行时 //只有一行的时候，oneLineWidth 不等于 -1
 //        if (oneLineWidth != -1) {
 //            height = getMeasuredHeight() / 2 - contentList.get(0).height / 2;
 //        }
+
+        int gravity = getGravity();
+        if ((gravity & Gravity.CENTER_VERTICAL) == Gravity.CENTER_VERTICAL){
+            //增加对Gravity  CenterVertical的支持
+            int textViewHeight = getHeight() - topPadding;
+            int textHeightCount = 0;
+            for (LINE aline : contentList) {
+                textHeightCount += aline.height;
+            }
+            height = (textViewHeight - textHeightCount)/2;
+            if (height <= topPadding){
+                height = topPadding;
+            }
+        }
 
 
         //为什么color要在这个onDraw方法里面设置才行？onMeasure方法中设置无效
         //不确定是缓存等原因，造成调用setText方法后，text的字体颜色不会被改变，需要在onDraw中再设置一次
         paint.setColor(textColor);
 
-        for (LINE aContentList : contentList) {
+        for (LINE aline : contentList) {
             //绘制一行
             float realDrawedWidth = leftPadding;
             /** 是否换新段落*/
             boolean newParagraph = false;
-            for (int j = 0; j < aContentList.line.size(); j++) {
-                ob = aContentList.line.get(j);
-                width = aContentList.widthList.get(j);
+            for (int j = 0; j < aline.line.size(); j++) {
+                ob = aline.line.get(j);
+                width = aline.widthList.get(j);
 
                 paint.getFontMetrics(mFontMetrics);
                 float x = realDrawedWidth;
                 // 当前heigh + 一行文字的高度 - baseline下方的高度
-                float y = height + aContentList.height - mFontMetrics.descent;
+                float y = height + aline.height - mFontMetrics.descent;
 //                float top = y - aContentList.height;
 //                float bottom = y + mFontMetrics.descent;
 //                float y = height + aContentList.height;
-                float top = y - aContentList.height;
+                float top = 0;
                 float bottom = y;
                 if (ob instanceof String) {
                     canvas.drawText((String) ob, realDrawedWidth, y, paint);
                     realDrawedWidth += width;
-                    if(((String)ob).endsWith("\n") && j == aContentList.line.size()-1){
+                    if (((String) ob).endsWith("\n") && j == aline.line.size() - 1) {
                         newParagraph = true;
                     }
                 } else if (ob instanceof SpanObject) {
@@ -317,25 +335,25 @@ public class AntiNewLineTextView extends TextView {
                         textBgColorPaint.setStyle(Style.FILL);
                         textBgColorRect.left = (int) realDrawedWidth;
                         int textHeight = (int) getTextSize();
-                        textBgColorRect.top = (int) (height + aContentList.height - textHeight - mFontMetrics.descent);
+                        textBgColorRect.top = (int) (height + aline.height - textHeight - mFontMetrics.descent);
                         textBgColorRect.right = textBgColorRect.left + width;
-                        textBgColorRect.bottom = (int) (height + aContentList.height + lineSpacing - mFontMetrics.descent);
+                        textBgColorRect.bottom = (int) (height + aline.height + lineSpacing - mFontMetrics.descent);
                         canvas.drawRect(textBgColorRect, textBgColorPaint);
-                        canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aContentList.height - mFontMetrics.descent, paint);
+                        canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aline.height - mFontMetrics.descent, paint);
                         realDrawedWidth += width;
                     } else {
                         //做字符串处理
-                        canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aContentList.height - mFontMetrics.descent, paint);
+                        canvas.drawText(((SpanObject) ob).source.toString(), realDrawedWidth, height + aline.height - mFontMetrics.descent, paint);
                         realDrawedWidth += width;
                     }
                 }
 
             }
             //如果要绘制段间距
-            if(newParagraph){
-                height += aContentList.height + paragraphSpacing;
-            }else{
-                height += aContentList.height + lineSpacing;
+            if (newParagraph) {
+                height += aline.height + paragraphSpacing;
+            } else {
+                height += aline.height + lineSpacing;
             }
         }
 
@@ -359,7 +377,6 @@ public class AntiNewLineTextView extends TextView {
         if (cachedHeight > 0) {
             return cachedHeight;
         }
-
 
 
         FontMetrics fontMetrics = paint.getFontMetrics();
@@ -474,14 +491,14 @@ public class AntiNewLineTextView extends TextView {
 
                 //判断行数的限制
 //                int maxLines = getMaxLines();
-                if (contentList.size() == maxLine){
+                if (contentList.size() == maxLine) {
                     //当前行数和最大行数相等
                     //最后一行的最后一个字符设置为…
-                    Object lastOb = line.line.get(line.line.size()-1);
+                    Object lastOb = line.line.get(line.line.size() - 1);
 
                     if (lastOb instanceof String) {
                         String str = ((String) lastOb);
-                        lastOb = str.substring(0,str.length()-1).concat("…");
+                        lastOb = str.substring(0, str.length() - 1).concat("…");
 
 
                     } else if (lastOb instanceof SpanObject) {
@@ -493,18 +510,18 @@ public class AntiNewLineTextView extends TextView {
                         } else {
                             //做字符串处理
                             String str = ((SpanObject) lastOb).source.toString();
-                            lastOb = str.substring(0,str.length()-1).concat("…");
+                            lastOb = str.substring(0, str.length() - 1).concat("…");
                         }
                     }
 
-                    line.line.set(line.line.size()-1,lastOb);
+                    line.line.set(line.line.size() - 1, lastOb);
 
                     //把当前字符后面的字符都清空
-                    for (int k = i+1, l = obList.size();k < l;k++){
-                        obList.remove(obList.size()-1);
+                    for (int k = i + 1, l = obList.size(); k < l; k++) {
+                        obList.remove(obList.size() - 1);
                     }
 
-                }else{
+                } else {
                     //没有超过最大行数
                     //判断是否有分段
                     int objNum = line.line.size();
@@ -529,7 +546,7 @@ public class AntiNewLineTextView extends TextView {
                 drawedWidth = obWidth;
                 lineHeight = obHeight;//这里给赋值了文字真实的高度
 
-            }else{
+            } else {
                 //这一行剩余的宽度 > 当前要画的字符
                 //obWidth是每个字符的宽度，drawedWith是已经绘制的字符的宽度
                 drawedWidth += obWidth;
@@ -538,10 +555,7 @@ public class AntiNewLineTextView extends TextView {
                     //当前字符是一个String，并且当前已经绘制的最后一个字符也是String
                     //把相连的String字符，变成一个String存到Line对象中
                     int size = line.line.size();
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(line.line.get(size - 1));
-                    sb.append(ob);
-                    ob = sb.toString();
+                    ob = String.valueOf(line.line.get(size - 1)) + ob;
                     obWidth = obWidth + line.widthList.get(size - 1);
                     line.line.set(size - 1, ob);
                     line.widthList.set(size - 1, (int) obWidth);
@@ -553,7 +567,6 @@ public class AntiNewLineTextView extends TextView {
                 }
 
             }
-
 
 
         }
@@ -591,7 +604,7 @@ public class AntiNewLineTextView extends TextView {
      */
     @SuppressWarnings("unchecked")
     private int getCachedData(String text, int width) {
-        if (textId == null){
+        if (textId == null) {
             textId = "";
         }
         SoftReference<MeasuredData> cache = measuredData.get(textId + text);
@@ -639,7 +652,7 @@ public class AntiNewLineTextView extends TextView {
         }
 
         SoftReference<MeasuredData> cache = new SoftReference<MeasuredData>(md);
-        if (textId == null){
+        if (textId == null) {
             textId = "";
         }
         measuredData.put(textId + text.toString(), cache);
@@ -651,15 +664,16 @@ public class AntiNewLineTextView extends TextView {
      * @param cs
      */
     public void setMText(CharSequence cs) {
-        setMText(null,cs);
+        setMText(null, cs);
     }
+
     /**
      * 用本函数代替{@link #setText(CharSequence)}
      *
      * @param cs
      */
     public void setMText(String textId, CharSequence cs) {
-        if (useDefault){
+        if (useDefault) {
             setText(cs);
             return;
         }
@@ -692,10 +706,7 @@ public class AntiNewLineTextView extends TextView {
         isList.toArray(spanArray);
         Arrays.sort(spanArray, 0, spanArray.length, new SpanObjectComparator());
         isList.clear();
-        for (int i = 0; i < spanArray.length; i++) {
-            //把排序后的SpanObject再添加进list
-            isList.add(spanArray[i]);
-        }
+        Collections.addAll(isList, spanArray);
 
         String str = cs.toString();
 
