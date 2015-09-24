@@ -143,19 +143,30 @@ public class AntiNewLineTextView extends TextView {
             Class ownerClass = this.getClass();
             ownerClass = ownerClass.getSuperclass();
 
-            Field field = ownerClass.getDeclaredField("mMaximum");
-            field.setAccessible(true);
 
-            maxLine = field.getInt(this);
-            if (maxLine < 1) {
-                //应该不会出现这种情况
+
+            Field field = ownerClass.getDeclaredField("mSingleLine");
+            field.setAccessible(true);
+            boolean singleLine = field.getBoolean(this);
+            if (singleLine){
+                //被设置为singleLine
                 maxLine = 1;
+            }else{
+                field = ownerClass.getDeclaredField("mMaximum");
+                field.setAccessible(true);
+
+                maxLine = field.getInt(this);
+                if (maxLine < 1) {
+                    //应该不会出现这种情况
+                    maxLine = 1;
+                }
             }
 
         } catch (Exception e) {
             Log.w(TAG, "反射异常", e);
 //            maxLine = 2;
         }
+
 
 
     }
@@ -285,6 +296,11 @@ public class AntiNewLineTextView extends TextView {
             int textHeightCount = 0;
             for (LINE aline : contentList) {
                 textHeightCount += aline.height;
+                textHeightCount += lineSpacing;
+            }
+            if (contentList.size()>0){
+                //把最后一个添加的lineSpaceing删除
+                textHeightCount -= lineSpacing;
             }
             height = (textViewHeight - textHeightCount)/2;
             if (height <= topPadding){
@@ -520,6 +536,9 @@ public class AntiNewLineTextView extends TextView {
                     for (int k = i + 1, l = obList.size(); k < l; k++) {
                         obList.remove(obList.size() - 1);
                     }
+
+                    //TODO 把line置为null，避免singleline的时候，单行被多添加一次，应该是有逻辑错误，需要修改。
+                    line = null;
 
                 } else {
                     //没有超过最大行数
@@ -761,6 +780,10 @@ public class AntiNewLineTextView extends TextView {
     public void setLineSpacingDP(int lineSpacingDP) {
         this.lineSpacingDP = lineSpacingDP;
         lineSpacing = dip2px(context, lineSpacingDP);
+        if (useDefault){
+            setLineSpacing(lineSpacing,0);
+        }
+
     }
 
     public void setParagraphSpacingDP(int paragraphSpacingDP) {
